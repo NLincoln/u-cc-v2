@@ -1,0 +1,199 @@
+use std::str::FromStr;
+use crate::ast::*;
+
+grammar;
+
+Comma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+};
+
+pub Program: Program = {
+  (FunctionDefinition)+ => Program {
+    functions: <>
+  }
+}
+
+FunctionDefinition: FunctionDefinition = {
+  <fsc:FunctionStorageClass?> <return_type:Type> <name:Ident> "(" <parameters:Comma<FunctionParameter>> ")" <body:FunctionBody> => {
+    FunctionDefinition {
+      return_type,
+      name,
+      parameters,
+      body,
+      storage_class: fsc
+    }
+  }
+}
+
+FunctionBody: Option<Vec<Statement>> = {
+  "{" <Statement*> "}" => Some(<>),
+  ";" => None
+}
+
+FunctionStorageClass: FunctionStorageClass = {
+  "static" => FunctionStorageClass::Static,
+  "extern" => FunctionStorageClass::Extern,
+}
+
+FunctionParameter: FunctionParameter = {
+  <ty:Type> <name:Ident> => FunctionParameter { ty, name }
+}
+
+Statement: Statement = {
+  "return" <Expr> ";" => Statement::Return(<>),
+  <Expr> ";" => Statement::Expr(<>),
+  <ty:Type> <name:Ident> "=" <value:Expr> ";" => Statement::VariableDefinition { ty, name, value },
+}
+
+Expr: Box<Expr> = {
+  AssignmentExpr,
+}
+
+AssignmentExpr: Box<Expr> = {
+  ConditionalExpr,
+  <lhs:UnaryExpr> <op:AssignmentOp> <value:AssignmentExpr> => Expr::Assignment { lhs, op, value }.into()
+}
+
+AssignmentOp: AssignmentOp = {
+  "=" => AssignmentOp::Assign,
+  "*=" => AssignmentOp::MulAssign,
+  "/=" => AssignmentOp::DivAssign,
+  "%=" => AssignmentOp::ModAssign,
+  "+=" => AssignmentOp::AddAssign,
+  "-=" => AssignmentOp::SubAssign,
+  "<<=" => AssignmentOp::LeftShiftAssign,
+  ">>=" => AssignmentOp::RightShiftAssign,
+  "&=" => AssignmentOp::AndAssign,
+  "^=" => AssignmentOp::XorAssign,
+  "|=" => AssignmentOp::OrAssign,
+}
+
+ConditionalExpr: Box<Expr> = {
+  LogicalOrExpr,
+  <cond:LogicalOrExpr> "?" <truthy:Expr> ":" <falsey:ConditionalExpr> => Expr::Ternary { cond, truthy, falsey }.into()
+}
+
+LogicalOrExpr: Box<Expr> = {
+  LogicalAndExpr,
+  <lhs:LogicalOrExpr> "||" <rhs:LogicalAndExpr> => Expr::Op(lhs, BinaryOp::Or, rhs).into(),
+}
+
+LogicalAndExpr: Box<Expr> = {
+  InclusiveOrExpr,
+  <lhs:LogicalAndExpr> "&&" <rhs:InclusiveOrExpr> => Expr::Op(lhs, BinaryOp::And, rhs).into(),
+}
+
+InclusiveOrExpr: Box<Expr> = {
+  ExclusiveOrExpr,
+  <lhs:InclusiveOrExpr> "|" <rhs:ExclusiveOrExpr> => Expr::Op(lhs, BinaryOp::BitOr, rhs).into(),
+}
+
+ExclusiveOrExpr: Box<Expr> = {
+  AndExpr,
+  <lhs:ExclusiveOrExpr> "^" <rhs:AndExpr> => Expr::Op(lhs, BinaryOp::BitXor, rhs).into(),
+}
+
+AndExpr: Box<Expr> = {
+  EqualityExpr,
+  <lhs:AndExpr> "&" <rhs:EqualityExpr> => Expr::Op(lhs, BinaryOp::BitAnd, rhs).into()
+}
+
+EqualityExpr: Box<Expr> = {
+  RelationalExpr,
+  <lhs:EqualityExpr> "==" <rhs:RelationalExpr> => Expr::Op(lhs, BinaryOp::Equal, rhs).into(),
+  <lhs:EqualityExpr> "!=" <rhs:RelationalExpr> => Expr::Op(lhs, BinaryOp::NotEqual, rhs).into(),
+}
+
+RelationalExpr: Box<Expr> = {
+  ShiftExpr,
+  <lhs:RelationalExpr> "<" <rhs:ShiftExpr> => Expr::Op(lhs, BinaryOp::LessThan, rhs).into(),
+  <lhs:RelationalExpr> ">" <rhs:ShiftExpr> => Expr::Op(lhs, BinaryOp::GreaterThan, rhs).into(),
+  <lhs:RelationalExpr> "<=" <rhs:ShiftExpr> => Expr::Op(lhs, BinaryOp::LessThanEqual, rhs).into(),
+  <lhs:RelationalExpr> ">=" <rhs:ShiftExpr> => Expr::Op(lhs, BinaryOp::GreaterThanEqual, rhs).into(),
+}
+
+ShiftExpr: Box<Expr> = {
+  AdditiveExpr,
+  <lhs:ShiftExpr> "<<" <rhs:AdditiveExpr> => Expr::Op(lhs, BinaryOp::LeftShift, rhs).into(),
+  <lhs:ShiftExpr> ">>" <rhs:AdditiveExpr> => Expr::Op(lhs, BinaryOp::RightShift, rhs).into(),
+}
+
+AdditiveExpr: Box<Expr> = {
+  MultiplicativeExpr,
+  <lhs:AdditiveExpr> "+" <rhs:MultiplicativeExpr> => Expr::Op(lhs, BinaryOp::Add, rhs).into(),
+  <lhs:AdditiveExpr> "-" <rhs:MultiplicativeExpr> => Expr::Op(lhs, BinaryOp::Sub, rhs).into(),
+}
+
+MultiplicativeExpr: Box<Expr> = {
+  CastExpr,
+  <lhs:MultiplicativeExpr> "*" <rhs:CastExpr> => Expr::Op(lhs, BinaryOp::Mul, rhs).into(),
+  <lhs:MultiplicativeExpr> "/" <rhs:CastExpr> => Expr::Op(lhs, BinaryOp::Div, rhs).into(),
+  <lhs:MultiplicativeExpr> "%" <rhs:CastExpr> => Expr::Op(lhs, BinaryOp::Mod, rhs).into(),
+}
+
+CastExpr: Box<Expr> = {
+  UnaryExpr,
+  "(" <ty:Type> ")" <expr:CastExpr> => Expr::Cast(ty, expr).into()
+}
+
+UnaryExpr: Box<Expr> = {
+  PostfixExpr,
+  "++" <UnaryExpr> => Expr::PrefixIncrement(<>).into(),
+  "--" <UnaryExpr> => Expr::PrefixDecrement(<>).into(),
+  "&" <Ident> => Expr::AddressOf(<>).into(),
+  "*" <CastExpr> => Expr::Dereference(<>).into(),
+  "!" <CastExpr> => Expr::Not(<>).into(),
+  "+" <CastExpr> => Expr::Plus(<>).into(),
+  "-" <CastExpr> => Expr::Neg(<>).into(),
+  "sizeof" <UnaryExpr> => Expr::SizeofExpr(<>).into(),
+  "sizeof" "(" <Type> ")" => Expr::SizeofType(<>).into(),
+}
+
+PostfixExpr: Box<Expr> = {
+  PrimaryExpr,
+  FunctionCall => Expr::FunctionCall(<>).into(),
+  <expr:PostfixExpr> "." <ident:Ident> => Expr::DotProperty(expr, ident).into(),
+  <expr:PostfixExpr> "->" <ident:Ident> => Expr::ArrowProperty(expr, ident).into(),
+  <PostfixExpr> "++" => Expr::PostIncrement(<>).into(),
+  <PostfixExpr> "--" => Expr::PostDecrement(<>).into(),
+}
+
+PrimaryExpr: Box<Expr> = {
+  Ident => Expr::Ident(<>).into(),
+  Num => Expr::Number(<>).into(),
+  RawString => Expr::RawString(<>).into(),
+  "(" <Expr> ")"
+}
+
+FunctionCall: FunctionCall = {
+  <name:Ident> "(" <arguments:Comma<Expr>> ")" => {
+    FunctionCall {
+      name,
+      arguments
+    }
+  }
+}
+
+Type: Type = {
+  "int" => Type::Int,
+  <Type> "*" => Type::Pointer(Box::new(<>)),
+}
+
+Ident: String = {
+  r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_string()
+}
+
+Num: i32 = {
+  r"[0-9]+" => i32::from_str(<>).unwrap()
+};
+
+RawString: String = {
+  <x:r#""(([^\\"]|\\.)*)""#> => x[1..(x.len() - 1)].to_string(),
+}

@@ -1,0 +1,14 @@
+[package]
+name = "lang"
+version = "0.1.0"
+authors = ["Nathan Lincoln <nll9q2@mst.edu>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+lalrpop-util = "0.16.3"
+regex = "1.1"
+clap = "2.32"
+
+[build-dependencies]
+lalrpop = "0.16.3"
