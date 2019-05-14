@@ -10,6 +10,11 @@ pub trait ExprWalker {
             Expr::RawString(literal) => self.visit_string_literal(literal),
             Expr::Ident(ident) => self.visit_ident(ident),
             Expr::AddressOf(ident) => self.visit_address_of(ident),
+            Expr::Index(expr, index) => {
+                let expr = self.walk_expr(expr)?;
+                let index = self.walk_expr(index)?;
+                self.visit_index(expr, index)
+            }
             Expr::ArrowProperty(lhs, ident) => {
                 let lhs = self.walk_expr(lhs)?;
                 self.visit_arrow_property(lhs, ident)
@@ -96,6 +101,11 @@ pub trait ExprWalker {
     fn visit_ident(&mut self, ident: &str) -> Result<Self::Node, Self::Error>;
 
     fn visit_address_of(&mut self, ident: &str) -> Result<Self::Node, Self::Error>;
+    fn visit_index(
+        &mut self,
+        expr: Self::Node,
+        index: Self::Node,
+    ) -> Result<Self::Node, Self::Error>;
 
     fn visit_arrow_property(
         &mut self,
@@ -212,6 +222,12 @@ pub trait AstWalker: ExprWalker {
     fn visit_variable_definition(&mut self, def: &VariableDefinition) -> Result<(), Self::Error> {
         Ok(())
     }
+    fn visit_variable_declaration(
+        &mut self,
+        decl: &VariableDeclaration,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 fn walk_statement<W: AstWalker>(statement: &Statement, walker: &mut W) -> Result<(), W::Error> {
@@ -219,7 +235,11 @@ fn walk_statement<W: AstWalker>(statement: &Statement, walker: &mut W) -> Result
 
     match statement {
         Statement::VariableDefinition(def) => {
+            walker.visit_variable_declaration(&def.declaration)?;
             walker.visit_variable_definition(def)?;
+        }
+        Statement::VariableDeclaration(decl) => {
+            walker.visit_variable_declaration(decl)?;
         }
         Statement::Expr(inner) => {
             walker.walk_expr(inner)?;

@@ -74,6 +74,7 @@ pub enum Type {
         arguments: Vec<Type>,
     },
     Pointer(Box<Type>),
+    Array(i32, Box<Type>),
 }
 
 impl Type {
@@ -86,9 +87,14 @@ impl Type {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct VariableDefinition {
+pub struct VariableDeclaration {
     pub ty: Type,
     pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariableDefinition {
+    pub declaration: VariableDeclaration,
     pub value: Box<Expr>,
 }
 
@@ -97,6 +103,7 @@ pub enum Statement {
     Return(Box<Expr>),
     Expr(Box<Expr>),
     VariableDefinition(VariableDefinition),
+    VariableDeclaration(VariableDeclaration),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,6 +116,8 @@ pub enum Expr {
     RawString(String),
     /// &a
     AddressOf(String),
+    /// a[b]
+    Index(Box<Expr>, Box<Expr>),
     /// *a
     Dereference(Box<Expr>),
     /// a()

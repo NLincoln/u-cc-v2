@@ -88,6 +88,20 @@ impl ExprWalker for TypeChecker {
         ))
     }
 
+    fn visit_index(
+        &mut self,
+        expr: Self::Node,
+        index: Self::Node,
+    ) -> Result<Self::Node, Self::Error> {
+        guard_numeric_type(&index)?;
+
+        match expr {
+            Type::Array(len, inner) => Ok(*inner),
+            Type::Pointer(inner) => Ok(*inner),
+            other => Err(format!("Expected an indexable type, received {:?}", other)),
+        }
+    }
+
     fn visit_arrow_property(
         &mut self,
         lhs: Self::Node,
@@ -258,8 +272,20 @@ impl AstWalker for TypeChecker {
     fn visit_variable_definition(&mut self, def: &VariableDefinition) -> Result<(), Self::Error> {
         let type_of = self.walk_expr(&def.value)?;
 
+        if !types_are_compatible(&def.declaration.ty, &type_of) {
+            return Err(format!(
+                "Invalid variable declaration: types are incompatible"
+            ));
+        }
+
+        Ok(())
+    }
+    fn visit_variable_declaration(
+        &mut self,
+        decl: &VariableDeclaration,
+    ) -> Result<(), Self::Error> {
         self.current_scope()
-            .insert(def.name.to_string(), def.ty.clone());
+            .insert(decl.name.to_string(), decl.ty.clone());
         Ok(())
     }
 }

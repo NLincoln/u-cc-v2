@@ -49,7 +49,22 @@ FunctionParameter: FunctionParameter = {
 Statement: Statement = {
   "return" <Expr> ";" => Statement::Return(<>),
   <Expr> ";" => Statement::Expr(<>),
-  <ty:Type> <name:Ident> "=" <value:Expr> ";" => Statement::VariableDefinition(VariableDefinition { ty, name, value }),
+  <ty_n:TypeWithName> ";" => Statement::VariableDeclaration(VariableDeclaration { ty: ty_n.0, name: ty_n.1 }),
+  <ty_n:TypeWithName> "=" <value:Expr> ";" => Statement::VariableDefinition(VariableDefinition { declaration: VariableDeclaration { ty: ty_n.0, name: ty_n.1, }, value }),
+}
+
+TypeWithName: (Type, String) = {
+  <ty:Type> <name:Ident> <arr:ConstArrayIndex*> => {
+    let mut type_of = ty;
+    for index in arr {
+      type_of = Type::Array(index, Box::new(type_of));
+    }
+    (type_of, name)
+  }
+}
+
+ConstArrayIndex: i32 = {
+  "[" <Num> "]" => <>
 }
 
 Expr: Box<Expr> = {
@@ -161,6 +176,7 @@ PostfixExpr: Box<Expr> = {
   FunctionCall => Expr::FunctionCall(<>).into(),
   <expr:PostfixExpr> "." <ident:Ident> => Expr::DotProperty(expr, ident).into(),
   <expr:PostfixExpr> "->" <ident:Ident> => Expr::ArrowProperty(expr, ident).into(),
+  <expr:PostfixExpr> "[" <index:Expr> "]" => Expr::Index(expr, index).into(),
   <PostfixExpr> "++" => Expr::PostIncrement(<>).into(),
   <PostfixExpr> "--" => Expr::PostDecrement(<>).into(),
 }
@@ -198,7 +214,7 @@ Ident: String = {
 }
 
 Num: i32 = {
-  r"[0-9]+" => i32::from_str(<>).unwrap()
+  r"-?[0-9]+" => i32::from_str(<>).unwrap()
 };
 
 RawString: String = {
