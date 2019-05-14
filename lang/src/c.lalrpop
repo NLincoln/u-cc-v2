@@ -15,19 +15,24 @@ Comma<T>: Vec<T> = {
 };
 
 pub Program: Program = {
-  (FunctionDefinition)+ => Program {
+  (Function)+ => Program {
     functions: <>
   }
 }
 
-FunctionDefinition: FunctionDefinition = {
-  <fsc:FunctionStorageClass?> <return_type:Type> <name:Ident> "(" <parameters:Comma<FunctionParameter>> ")" <body:FunctionBody> => {
-    FunctionDefinition {
+Function: Function = {
+  <return_type:Type> <name:Ident> "(" <parameters:Comma<FunctionParameter>> ")" <body:FunctionBody> => {
+    let declaration = FunctionDeclaration {
       return_type,
       name,
       parameters,
-      body,
-      storage_class: fsc
+    };
+    match body {
+      None => Function::Declaration(declaration),
+      Some(body) => Function::Definition(FunctionDefinition {
+        body,
+        declaration
+      })
     }
   }
 }
@@ -37,11 +42,6 @@ FunctionBody: Option<Vec<Statement>> = {
   ";" => None
 }
 
-FunctionStorageClass: FunctionStorageClass = {
-  "static" => FunctionStorageClass::Static,
-  "extern" => FunctionStorageClass::Extern,
-}
-
 FunctionParameter: FunctionParameter = {
   <ty:Type> <name:Ident> => FunctionParameter { ty, name }
 }
@@ -49,7 +49,7 @@ FunctionParameter: FunctionParameter = {
 Statement: Statement = {
   "return" <Expr> ";" => Statement::Return(<>),
   <Expr> ";" => Statement::Expr(<>),
-  <ty:Type> <name:Ident> "=" <value:Expr> ";" => Statement::VariableDefinition { ty, name, value },
+  <ty:Type> <name:Ident> "=" <value:Expr> ";" => Statement::VariableDefinition(VariableDefinition { ty, name, value }),
 }
 
 Expr: Box<Expr> = {
@@ -181,8 +181,17 @@ FunctionCall: FunctionCall = {
   }
 }
 
+NumericType: NumericType = {
+  "int" => NumericType::Int,
+  "char" => NumericType::Char,
+  "long" "int" => NumericType::Long,
+  "long" "long" "int" => NumericType::LongLong,
+  "short" "int" => NumericType::Short,
+}
+
 Type: Type = {
-  "int" => Type::Int,
+  NumericType => Type::Signed(<>),
+  "unsigned" <NumericType> => Type::Unsigned(<>),
   <Type> "*" => Type::Pointer(Box::new(<>)),
 }
 

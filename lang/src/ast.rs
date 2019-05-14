@@ -1,12 +1,6 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    pub functions: Vec<FunctionDefinition>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum FunctionStorageClass {
-    Extern,
-    Static,
+    pub functions: Vec<Function>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -16,26 +10,64 @@ pub struct FunctionParameter {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FunctionDefinition {
-    pub return_type: Type,
-    pub name: String,
-    pub parameters: Vec<FunctionParameter>,
-    pub storage_class: Option<FunctionStorageClass>,
-    pub body: Option<Vec<Statement>>,
+pub enum Function {
+    Definition(FunctionDefinition),
+    Declaration(FunctionDeclaration),
 }
 
-impl FunctionDefinition {
-    pub fn type_of(&self) -> Type {
-        Type::Function {
-            return_type: Box::new(self.return_type.clone()),
-            arguments: self.parameters.iter().map(|arg| arg.ty.clone()).collect(),
+impl Function {
+    pub fn declaration(&self) -> &FunctionDeclaration {
+        match self {
+            Function::Declaration(decl) => decl,
+            Function::Definition(def) => &def.declaration,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Type {
+pub struct FunctionDeclaration {
+    pub return_type: Type,
+    pub name: String,
+    pub parameters: Vec<FunctionParameter>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionDefinition {
+    pub declaration: FunctionDeclaration,
+    pub body: Vec<Statement>,
+}
+
+impl FunctionDefinition {
+    pub fn return_type(&self) -> &Type {
+        &self.declaration.return_type
+    }
+    pub fn parameters(&self) -> &[FunctionParameter] {
+        &self.declaration.parameters
+    }
+    pub fn type_of(&self) -> Type {
+        Type::Function {
+            return_type: Box::new(self.return_type().clone()),
+            arguments: self.parameters().iter().map(|arg| arg.ty.clone()).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum NumericType {
+    Char,
+    Short,
     Int,
+    Long,
+    LongLong,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Type {
+    Void,
+
+    Signed(NumericType),
+    Unsigned(NumericType),
+
     Function {
         return_type: Box<Type>,
         arguments: Vec<Type>,
@@ -44,25 +76,26 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn stack_size(&self) -> usize {
+    fn is_numeric(&self) -> bool {
         match self {
-            // ok I mean this is probably the worst way to do this but whatever.
-            Type::Int => 4,
-            Type::Function { .. } => 0,
-            Type::Pointer(_) => 8,
+            Type::Signed(_) | Type::Unsigned(_) => true,
+            _ => false,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariableDefinition {
+    pub ty: Type,
+    pub name: String,
+    pub value: Box<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Return(Box<Expr>),
     Expr(Box<Expr>),
-    VariableDefinition {
-        ty: Type,
-        name: String,
-        value: Box<Expr>,
-    },
+    VariableDefinition(VariableDefinition),
 }
 
 #[derive(Debug, Clone, PartialEq)]
