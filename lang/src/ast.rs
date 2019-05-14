@@ -31,6 +31,15 @@ pub struct FunctionDeclaration {
     pub parameters: Vec<FunctionParameter>,
 }
 
+impl FunctionDeclaration {
+    pub fn type_of(&self) -> Type {
+        Type::Function {
+            return_type: Box::new(self.return_type.clone()),
+            arguments: self.parameters.iter().map(|arg| arg.ty.clone()).collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDefinition {
     pub declaration: FunctionDeclaration,
@@ -44,12 +53,6 @@ impl FunctionDefinition {
     pub fn parameters(&self) -> &[FunctionParameter] {
         &self.declaration.parameters
     }
-    pub fn type_of(&self) -> Type {
-        Type::Function {
-            return_type: Box::new(self.return_type().clone()),
-            arguments: self.parameters().iter().map(|arg| arg.ty.clone()).collect(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,8 +60,6 @@ pub enum NumericType {
     Char,
     Short,
     Int,
-    Long,
-    LongLong,
 }
 
 #[derive(Debug, Clone, PartialEq)]

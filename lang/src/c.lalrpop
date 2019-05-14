@@ -184,8 +184,6 @@ FunctionCall: FunctionCall = {
 NumericType: NumericType = {
   "int" => NumericType::Int,
   "char" => NumericType::Char,
-  "long" "int" => NumericType::Long,
-  "long" "long" "int" => NumericType::LongLong,
   "short" "int" => NumericType::Short,
 }
 

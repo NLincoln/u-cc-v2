@@ -6,12 +6,19 @@ struct TypeChecker {
     scopes: Vec<HashMap<String, Type>>,
 }
 
-fn guard_numeric_type(ty: &Type) -> Result<(), String> {
+fn is_numeric_type(ty: &Type) -> bool {
     match ty {
-        Type::Pointer(_) => Ok(()),
-        Type::Unsigned(_) | Type::Signed(_) => Ok(()),
-        other => Err(format!("Expected a numeric type, received {:?}", other)),
+        Type::Pointer(_) => true,
+        Type::Unsigned(_) | Type::Signed(_) => true,
+        other => false,
     }
+}
+
+fn guard_numeric_type(ty: &Type) -> Result<(), String> {
+    if is_numeric_type(ty) {
+        return Ok(());
+    }
+    return Err(format!("Expected a numeric type, received {:?}", ty));
 }
 
 fn is_unsigned_int(ty: &Type) -> bool {
@@ -19,6 +26,13 @@ fn is_unsigned_int(ty: &Type) -> bool {
         Type::Unsigned(NumericType::Int) => true,
         _ => false,
     }
+}
+
+fn types_are_compatible(a: &Type, b: &Type) -> bool {
+    if is_numeric_type(a) && is_numeric_type(b) {
+        return true;
+    }
+    return false;
 }
 
 fn integer_promotion(a: &Type, b: &Type) -> Type {
@@ -128,9 +142,38 @@ impl ExprWalker for TypeChecker {
     fn visit_function_call(
         &mut self,
         name: &str,
-        args: Vec<Self::Node>,
+        passed_args: Vec<Self::Node>,
     ) -> Result<Self::Node, Self::Error> {
-        unimplemented!()
+        let ty = self
+            .lookup(name)
+            .ok_or_else(|| format!("Could not find function {}", name))?;
+        let (return_type, needed_args) = match ty {
+            Type::Function {
+                return_type,
+                arguments,
+            } => (return_type, arguments),
+            other => return Err(format!("Cannot call {} as a function", name)),
+        };
+
+        if passed_args.len() != needed_args.len() {
+            return Err(format!(
+                "Incorrect number of arguments to function {}: Needed {}, got {}",
+                name,
+                needed_args.len(),
+                passed_args.len()
+            ));
+        }
+
+        for (passed, needed) in passed_args.iter().zip(needed_args.iter()) {
+            if !types_are_compatible(passed, needed) {
+                return Err(format!(
+                    "Tried to pass an incorrect type to {}: Needed {:?}, got {:?}",
+                    name, needed, passed
+                ));
+            }
+        }
+
+        Ok(*return_type.clone())
     }
 
     fn visit_dot_property(
@@ -195,6 +238,7 @@ impl ExprWalker for TypeChecker {
         Ok(expr)
     }
 }
+
 impl AstWalker for TypeChecker {
     fn enter_scope(&mut self) {
         self.scopes.push(Default::default());
@@ -202,6 +246,14 @@ impl AstWalker for TypeChecker {
 
     fn exit_scope(&mut self) {
         self.scopes.pop();
+    }
+    fn visit_function_declaration(
+        &mut self,
+        func: &FunctionDeclaration,
+    ) -> Result<(), Self::Error> {
+        self.current_scope()
+            .insert(func.name.clone(), func.type_of());
+        Ok(())
     }
     fn visit_variable_definition(&mut self, def: &VariableDefinition) -> Result<(), Self::Error> {
         let type_of = self.walk_expr(&def.value)?;
