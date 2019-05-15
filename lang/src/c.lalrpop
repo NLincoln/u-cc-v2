@@ -51,6 +51,36 @@ Statement: Statement = {
   <Expr> ";" => Statement::Expr(<>),
   <ty_n:TypeWithName> ";" => Statement::VariableDeclaration(VariableDeclaration { ty: ty_n.0, name: ty_n.1 }),
   <ty_n:TypeWithName> "=" <value:Expr> ";" => Statement::VariableDefinition(VariableDefinition { declaration: VariableDeclaration { ty: ty_n.0, name: ty_n.1, }, value }),
+  IfStatement => Statement::If(<>),
+  WhileStatement => Statement::While(<>),
+  DoWhileStatement => Statement::DoWhile(<>),
+  "break" => Statement::Break,
+  "continue" => Statement::Continue,
+}
+
+IfStatement: If = {
+  "if" <cond:ConditionalStatementCond> <yes:ConditionalStatementSegment> => If { cond, yes, no: None },
+  "if" <cond:ConditionalStatementCond> <yes:ConditionalStatementSegment> <no:IfStatementElse> => If { cond, yes, no: Some(no) },
+}
+
+WhileStatement: While = {
+  "while" <cond:ConditionalStatementCond> <body:ConditionalStatementSegment> => While { cond, body }
+}
+
+DoWhileStatement: DoWhile = {
+  "do" "{" <body:Statement*> "}" "while" <cond:ConditionalStatementCond> ";" => DoWhile { cond, body }
+}
+
+ConditionalStatementCond: Box<Expr> = {
+  "(" <Expr> ")" => <>
+}
+
+ConditionalStatementSegment: Vec<Statement> = {
+  "{" <Statement*> "}" => <>
+}
+
+IfStatementElse: Vec<Statement> = {
+  "else" <ConditionalStatementSegment> => <>
 }
 
 TypeWithName: (Type, String) = {

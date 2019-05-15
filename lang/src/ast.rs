@@ -99,11 +99,35 @@ pub struct VariableDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct If {
+    pub cond: Box<Expr>,
+    pub yes: Vec<Statement>,
+    pub no: Option<Vec<Statement>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct While {
+    pub cond: Box<Expr>,
+    pub body: Vec<Statement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DoWhile {
+    pub cond: Box<Expr>,
+    pub body: Vec<Statement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Return(Box<Expr>),
     Expr(Box<Expr>),
     VariableDefinition(VariableDefinition),
     VariableDeclaration(VariableDeclaration),
+    Break,
+    Continue,
+    If(If),
+    While(While),
+    DoWhile(DoWhile),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -173,13 +173,15 @@ pub trait ExprWalker {
 /// (note that a more robust implementation would allow the walker to decide exactly how "far out"
 /// to bail).
 pub trait AstWalker: ExprWalker {
+    type AstError: From<<Self as ExprWalker>::Error>;
+
     fn enter_scope(&mut self);
     fn exit_scope(&mut self);
     /// "Visits" the entire program
     ///
     /// This will be called once at the beginning of the ast walk. Usually you don't need this,
     /// however
-    fn visit_program(&mut self, program: &Program) -> Result<(), Self::Error> {
+    fn visit_program(&mut self, program: &Program) -> Result<(), Self::AstError> {
         Ok(())
     }
 
@@ -191,69 +193,134 @@ pub trait AstWalker: ExprWalker {
     fn visit_function_declaration(
         &mut self,
         func: &FunctionDeclaration,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Self::AstError> {
         Ok(())
     }
 
     /// Called for each parameter of a function. This will be called directly after the function
     /// declaration method is called, and before the function definition is called (if any).
-    fn visit_function_parameter(&mut self, param: &FunctionParameter) -> Result<(), Self::Error> {
+    fn visit_function_parameter(
+        &mut self,
+        param: &FunctionParameter,
+    ) -> Result<(), Self::AstError> {
         Ok(())
     }
     /// Called when we're starting to visit the actual body of the function. If you need to do
     /// some analysis of the entirety of a function, it's best to do it here.
-    fn visit_function_definition(&mut self, func: &FunctionDefinition) -> Result<(), Self::Error> {
+    fn visit_function_definition(
+        &mut self,
+        func: &FunctionDefinition,
+    ) -> Result<(), Self::AstError> {
         Ok(())
     }
 
     /// Called for each statement in the body of a function
-    fn visit_statement(&mut self, stmt: &Statement) -> Result<(), Self::Error> {
+    fn visit_statement(&mut self, stmt: &Statement) -> Result<(), Self::AstError> {
         Ok(())
     }
 
-    fn visit_return_statement(&mut self, expr: &Self::Node) -> Result<(), Self::Error> {
+    fn visit_return_statement(&mut self, expr: &Self::Node) -> Result<(), Self::AstError> {
         Ok(())
     }
 
-    fn visit_expr(&mut self, expr: &Expr) -> Result<Self::Node, Self::Error> {
-        self.walk_expr(expr)
+    fn visit_expr(&mut self, expr: &Expr) -> Result<Self::Node, Self::AstError> {
+        Ok(self.walk_expr(expr)?)
     }
 
-    fn visit_variable_definition(&mut self, def: &VariableDefinition) -> Result<(), Self::Error> {
+    fn visit_variable_definition(
+        &mut self,
+        def: &VariableDefinition,
+    ) -> Result<(), Self::AstError> {
         Ok(())
     }
     fn visit_variable_declaration(
         &mut self,
         decl: &VariableDeclaration,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Self::AstError> {
+        Ok(())
+    }
+
+    fn visit_if(
+        &mut self,
+        cond: Self::Node,
+        yes: &[Statement],
+        no: Option<&[Statement]>,
+    ) -> Result<(), Self::AstError> {
+        for stmt in yes {
+            self.walk_statement(stmt)?;
+        }
+        if let Some(no) = no {
+            for stmt in no {
+                self.walk_statement(stmt)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn visit_break(&mut self) -> Result<(), Self::AstError> {
+        Ok(())
+    }
+    fn visit_continue(&mut self) -> Result<(), Self::AstError> {
+        Ok(())
+    }
+
+    fn visit_while(&mut self, while_stmt: &While) -> Result<(), Self::AstError> {
+        self.visit_expr(&while_stmt.cond)?;
+        for stmt in while_stmt.body.iter() {
+            self.walk_statement(stmt)?;
+        }
+        Ok(())
+    }
+
+    fn visit_do_while(&mut self, do_while: &DoWhile) -> Result<(), Self::AstError> {
+        for stmt in do_while.body.iter() {
+            self.walk_statement(stmt)?;
+        }
+        self.visit_expr(&do_while.cond)?;
+        Ok(())
+    }
+
+    fn walk_statement(&mut self, statement: &Statement) -> Result<(), Self::AstError> {
+        self.visit_statement(statement)?;
+
+        match statement {
+            Statement::VariableDefinition(def) => {
+                self.visit_variable_declaration(&def.declaration)?;
+                self.visit_variable_definition(def)?;
+            }
+            Statement::VariableDeclaration(decl) => {
+                self.visit_variable_declaration(decl)?;
+            }
+            Statement::Expr(inner) => {
+                self.walk_expr(inner)?;
+            }
+            Statement::Return(inner) => {
+                let inner = self.walk_expr(inner)?;
+                self.visit_return_statement(&inner)?;
+            }
+            Statement::If(If { cond, yes, no }) => {
+                let cond = self.walk_expr(cond)?;
+                self.visit_if(cond, yes, no.as_ref().map(AsRef::as_ref))?;
+            }
+            Statement::Break => {
+                self.visit_break()?;
+            }
+            Statement::Continue => {
+                self.visit_continue()?;
+            }
+            Statement::While(while_stmt) => {
+                self.visit_while(while_stmt)?;
+            }
+            Statement::DoWhile(do_while) => {
+                self.visit_do_while(do_while)?;
+            }
+        };
+
         Ok(())
     }
 }
 
-fn walk_statement<W: AstWalker>(statement: &Statement, walker: &mut W) -> Result<(), W::Error> {
-    walker.visit_statement(statement)?;
-
-    match statement {
-        Statement::VariableDefinition(def) => {
-            walker.visit_variable_declaration(&def.declaration)?;
-            walker.visit_variable_definition(def)?;
-        }
-        Statement::VariableDeclaration(decl) => {
-            walker.visit_variable_declaration(decl)?;
-        }
-        Statement::Expr(inner) => {
-            walker.walk_expr(inner)?;
-        }
-        Statement::Return(inner) => {
-            let inner = walker.walk_expr(inner)?;
-            walker.visit_return_statement(&inner)?;
-        }
-    };
-
-    Ok(())
-}
-
-pub fn walk<W: AstWalker>(ast: &Program, walker: &mut W) -> Result<(), W::Error> {
+pub fn walk<W: AstWalker>(ast: &Program, walker: &mut W) -> Result<(), W::AstError> {
     walker.visit_program(ast)?;
 
     for function in ast.functions.iter() {
@@ -266,7 +333,7 @@ pub fn walk<W: AstWalker>(ast: &Program, walker: &mut W) -> Result<(), W::Error>
         }
         if let Function::Definition(def) = function {
             for statement in def.body.iter() {
-                walk_statement(statement, walker)?;
+                walker.walk_statement(statement)?;
             }
         }
     }

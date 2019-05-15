@@ -254,6 +254,7 @@ impl ExprWalker for TypeChecker {
 }
 
 impl AstWalker for TypeChecker {
+    type AstError = <Self as ExprWalker>::Error;
     fn enter_scope(&mut self) {
         self.scopes.push(Default::default());
     }
