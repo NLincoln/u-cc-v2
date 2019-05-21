@@ -1,6 +1,8 @@
 pub mod ast;
 pub mod walker;
 pub use ast::*;
+pub mod symbol;
+
 use lalrpop_util::lalrpop_mod;
 
 lalrpop_mod!(c);

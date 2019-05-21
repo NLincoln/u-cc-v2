@@ -1,9 +1,10 @@
 use lang::ast::*;
+use lang::symbol::SymbolTable;
 use lang::walker::{AstWalker, ExprWalker};
 use std::collections::HashMap;
 
 struct TypeChecker {
-    scopes: Vec<HashMap<String, Type>>,
+    table: SymbolTable<Type>,
 }
 
 fn is_numeric_type(ty: &Type) -> bool {
@@ -45,20 +46,8 @@ fn integer_promotion(a: &Type, b: &Type) -> Type {
 impl TypeChecker {
     fn new() -> TypeChecker {
         TypeChecker {
-            scopes: vec![Default::default()],
+            table: Default::default(),
         }
-    }
-    fn current_scope(&mut self) -> &mut HashMap<String, Type> {
-        self.scopes.last_mut().unwrap()
-    }
-    fn lookup(&self, ident: &str) -> Option<&Type> {
-        for scope in self.scopes.iter() {
-            match scope.get(ident) {
-                found @ Some(_) => return found,
-                None => {}
-            }
-        }
-        None
     }
 }
 impl ExprWalker for TypeChecker {
@@ -74,14 +63,16 @@ impl ExprWalker for TypeChecker {
     }
 
     fn visit_ident(&mut self, ident: &str) -> Result<Self::Node, Self::Error> {
-        self.lookup(ident)
+        self.table
+            .lookup(ident)
             .cloned()
             .ok_or_else(|| format!("Could not find identifier {}", ident))
     }
 
     fn visit_address_of(&mut self, ident: &str) -> Result<Self::Node, Self::Error> {
         Ok(Type::Pointer(
-            self.lookup(ident)
+            self.table
+                .lookup(ident)
                 .cloned()
                 .ok_or_else(|| format!("Could not find identifier {}", ident))?
                 .into(),
@@ -159,6 +150,7 @@ impl ExprWalker for TypeChecker {
         passed_args: Vec<Self::Node>,
     ) -> Result<Self::Node, Self::Error> {
         let ty = self
+            .table
             .lookup(name)
             .ok_or_else(|| format!("Could not find function {}", name))?;
         let (return_type, needed_args) = match ty {
@@ -256,18 +248,17 @@ impl ExprWalker for TypeChecker {
 impl AstWalker for TypeChecker {
     type AstError = <Self as ExprWalker>::Error;
     fn enter_scope(&mut self) {
-        self.scopes.push(Default::default());
+        self.table.push_scope();
     }
 
     fn exit_scope(&mut self) {
-        self.scopes.pop();
+        self.table.pop_scope();
     }
     fn visit_function_declaration(
         &mut self,
         func: &FunctionDeclaration,
     ) -> Result<(), Self::Error> {
-        self.current_scope()
-            .insert(func.name.clone(), func.type_of());
+        self.table.insert(func.name.clone(), func.type_of());
         Ok(())
     }
     fn visit_variable_definition(&mut self, def: &VariableDefinition) -> Result<(), Self::Error> {
@@ -285,8 +276,7 @@ impl AstWalker for TypeChecker {
         &mut self,
         decl: &VariableDeclaration,
     ) -> Result<(), Self::Error> {
-        self.current_scope()
-            .insert(decl.name.to_string(), decl.ty.clone());
+        self.table.insert(decl.name.to_string(), decl.ty.clone());
         Ok(())
     }
 }

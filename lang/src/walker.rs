@@ -197,20 +197,15 @@ pub trait AstWalker: ExprWalker {
         Ok(())
     }
 
-    /// Called for each parameter of a function. This will be called directly after the function
-    /// declaration method is called, and before the function definition is called (if any).
-    fn visit_function_parameter(
-        &mut self,
-        param: &FunctionParameter,
-    ) -> Result<(), Self::AstError> {
-        Ok(())
-    }
     /// Called when we're starting to visit the actual body of the function. If you need to do
     /// some analysis of the entirety of a function, it's best to do it here.
     fn visit_function_definition(
         &mut self,
         func: &FunctionDefinition,
     ) -> Result<(), Self::AstError> {
+        for statement in func.body.iter() {
+            self.walk_statement(statement)?;
+        }
         Ok(())
     }
 
@@ -219,7 +214,7 @@ pub trait AstWalker: ExprWalker {
         Ok(())
     }
 
-    fn visit_return_statement(&mut self, expr: &Self::Node) -> Result<(), Self::AstError> {
+    fn visit_return_statement(&mut self, expr: Self::Node) -> Result<(), Self::AstError> {
         Ok(())
     }
 
@@ -231,6 +226,7 @@ pub trait AstWalker: ExprWalker {
         &mut self,
         def: &VariableDefinition,
     ) -> Result<(), Self::AstError> {
+        self.visit_expr(&def.value)?;
         Ok(())
     }
     fn visit_variable_declaration(
@@ -296,7 +292,7 @@ pub trait AstWalker: ExprWalker {
             }
             Statement::Return(inner) => {
                 let inner = self.walk_expr(inner)?;
-                self.visit_return_statement(&inner)?;
+                self.visit_return_statement(inner)?;
             }
             Statement::If(If { cond, yes, no }) => {
                 let cond = self.walk_expr(cond)?;
@@ -327,14 +323,6 @@ pub fn walk<W: AstWalker>(ast: &Program, walker: &mut W) -> Result<(), W::AstErr
         walker.visit_function_declaration(function.declaration())?;
         if let Function::Definition(def) = function {
             walker.visit_function_definition(def)?;
-        }
-        for param in function.declaration().parameters.iter() {
-            walker.visit_function_parameter(param)?;
-        }
-        if let Function::Definition(def) = function {
-            for statement in def.body.iter() {
-                walker.walk_statement(statement)?;
-            }
         }
     }
     Ok(())

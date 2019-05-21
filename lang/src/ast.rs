@@ -1,3 +1,5 @@
+use std::fmt::{self, Display};
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub functions: Vec<Function>,
@@ -7,6 +9,12 @@ pub struct Program {
 pub struct FunctionParameter {
     pub ty: Type,
     pub name: String,
+}
+
+impl Display for FunctionParameter {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.ty, self.name)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,6 +48,21 @@ impl FunctionDeclaration {
     }
 }
 
+impl Display for FunctionDeclaration {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.return_type, self.name)?;
+        write!(f, "(")?;
+        for (i, param) in self.parameters.iter().enumerate() {
+            write!(f, "{}", param)?;
+            if i != self.parameters.len() - 1 {
+                write!(f, ", ")?;
+            }
+        }
+        write!(f, ")")?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDefinition {
     pub declaration: FunctionDeclaration,
@@ -62,6 +85,18 @@ pub enum NumericType {
     Int,
 }
 
+impl Display for NumericType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use NumericType::*;
+        let name = match self {
+            Char => "char",
+            Short => "short",
+            Int => "int",
+        };
+        write!(f, "{}", name)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Void,
@@ -82,6 +117,32 @@ impl Type {
         match self {
             Type::Signed(_) | Type::Unsigned(_) => true,
             _ => false,
+        }
+    }
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Type::*;
+        match self {
+            Void => write!(f, "void"),
+            Signed(num) | Unsigned(num) => write!(f, "{}", num),
+            Function {
+                return_type,
+                arguments,
+            } => {
+                write!(f, "{}", return_type)?;
+                write!(f, "(");
+                for (i, arg) in arguments.iter().enumerate() {
+                    write!(f, "{}", arg)?;
+                    if i != arguments.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, ")")
+            }
+            Pointer(inner) => write!(f, "{}*", inner),
+            Array(len, inner) => write!(f, "{}[{}]", inner, len),
         }
     }
 }

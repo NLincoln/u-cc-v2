@@ -1,2 +1,2 @@
 [workspace]
-members = ["lang", "typechk", "cc"]
+members = ["lang", "typechk", "codegen", "cc"]

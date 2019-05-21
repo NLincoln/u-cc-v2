@@ -9,6 +9,11 @@ fn main() {
             return;
         }
     };
-    let ast = lang::parse(&code).unwrap();
     typechk::type_check(&ast).unwrap();
+    for func in codegen::codegen(&ast).unwrap() {
+        println!("{}:", func.declaration());
+        for inst in func.instructions() {
+            println!("  {}", inst);
+        }
+    }
 }
